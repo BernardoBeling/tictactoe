@@ -92,7 +92,7 @@ class server:
         winner = ''
         while 1:
             if self.state == 0: #lobby
-                s.settimeout(15)
+                s.settimeout(60)
                 try:
                     if self.players_count == self.max_players:
                         self.state = 1
