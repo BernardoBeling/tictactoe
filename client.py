@@ -10,7 +10,6 @@ if __name__ == '__main__':
     port = int(input('Server port (default 50000): ') or 50000)
     attempts = 0
     client_id = 0
-
     client = socket(AF_INET,SOCK_DGRAM)
     client.settimeout(5)
 
@@ -34,14 +33,13 @@ if __name__ == '__main__':
 
     status = ''
     type = ''
-    #p_queue = None
-    #gui_process = None
+    log = open('client_log.txt','w')
 
     try:
         while status != 'SHUT':
             msg = client.recv(1500)
             res = msg.decode().split(';')
-            print(f'Recebido no client: {res}')
+            log.write(f'Recebido no client: {res}\n')
             status = res[0]
 
             if status == 'STRT':
@@ -51,10 +49,11 @@ if __name__ == '__main__':
                 gui_process.start()
                 while p_queue.empty():
                     continue
-                print(p_queue.get())
+                log.write(p_queue.get())
 
             if status == 'TURN' and res[1] == client_id:
                 print('Your turn...')
+                log.write('Your turn...\n')
                 #logica comunicacao gui x client
                 p_queue.put(f'{type};{res[2]}')
                 time.sleep(0.2)
@@ -64,20 +63,24 @@ if __name__ == '__main__':
                         move = p_queue.get()
 
                 if move == 'n':
-                    print(move)
+                    log.write(f'My move: {move}\n')
                     client.sendto(f'MOVE;1;{client_id}'.encode(), (ip,port))
                 elif move != '':
-                    print(move)
+                    log.write(f'My move: {move}\n')
                     client.sendto(f'MOVE;{move};{client_id}'.encode(), (ip,port))
 
             if status == 'SHOW':
                 print(res[1])
+                log.write(res[1]+'\n')
             
-        print('Kill process!')
+        log.write('Kill gui process!\n')
         gui_process.kill()
 
     except timeout as err:
-        print('Exiting...')
+        print('Socket timeout...')
+        log.write('Socket timeout...\n')
     finally:
         print('Exiting...')
+        log.write('Exiting...\n')
+        log.close()
         quit()

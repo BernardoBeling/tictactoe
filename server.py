@@ -51,7 +51,7 @@ class player:
         self.moves.append(move)
 
 class server:
-    def __init__(self,ip,port, max_players = 2):
+    def __init__(self,ip,port,log,max_players = 2):
         self.ip = ip
         self.port = port
         self.players_count = 0
@@ -62,6 +62,7 @@ class server:
         self.turn = 0 #0|1
         self.refresh = False
         self.scoreboard = {}
+        self.log = log
     
     def clear_moves(self):
         self.players[0].moves = []
@@ -83,6 +84,11 @@ class server:
                 + '='*22
         print(scoreboard_str)
         return scoreboard_str
+    
+    def printl(self,string):
+        print(string)
+        log.write(string + '\n')
+
 
     def parse(self,message,clientIP):
         message = message.decode().split(';')
@@ -123,9 +129,8 @@ class server:
             print(f'Error binding server to IP:PORT\n Error: {err}')
             return False
             
-        print(f'Server online on {self.ip}:{self.port} with UDP connection!')
+        self.printl(f'Server online on {self.ip}:{self.port} with UDP connection!')
 
-        winner = ''
         while 1:
             if self.state == 0: #lobby
                 s.settimeout(60)
@@ -142,10 +147,10 @@ class server:
                         s.sendto(res.encode(), clientIP)
                         
 
-                    print(f'Total players: {self.players_count}/{self.max_players}')
+                    self.printl(f'Total players: {self.players_count}/{self.max_players}')
 
                 except timeout as err:
-                    print(f'No connection attempts after 15s...\nError: {err}, exiting...')
+                    self.printl(f'No connection attempts after 15s...\nError: {err}, exiting...')
                     s.close()
                     break
 
@@ -156,29 +161,29 @@ class server:
 
                 s.settimeout(15) #move time
                 try:
-                    print(f"{self.players[self.turn].name}'s turn...")
+                    self.printl(f"{self.players[self.turn].name}'s turn...")
 
                     if self.moves_count == 0:
                         last_move = ''
                     
                     turn_msg = f'TURN;{cur_player_id};{last_move}'.encode()
                     s.sendto(turn_msg,cur_player_ip)
-                    print(f"Sended message: {turn_msg,cur_player_ip}")
+                    self.printl(f"Sended message: {turn_msg,cur_player_ip}")
 
                     move_msg, clientIP = s.recvfrom(1500)
-                    print(f'Recebido no server: {move_msg}')
+                    self.printl(f'Recebido no server: {move_msg}')
                     
                     last_move = self.parse(move_msg,clientIP)
                                 
                 except timeout as err:
-                    print(f"{self.players[self.turn].name} didn't move in time, switching turn...")
+                    self.printl(f"{self.players[self.turn].name} didn't move in time, switching turn...")
                     self.turn = switch_turn(self.turn)
 
             elif self.state == 2: #game finished
-                self.print_scoreboard()
+                scoreboard_str = self.print_scoreboard()
                 self.clear_moves()
                 for p in self.players:
-                    show_msg = f'SHOW;{self.print_scoreboard()}'.encode()
+                    show_msg = f'SHOW;{scoreboard_str}'.encode()
                     s.sendto(show_msg,p.ip)
                     s.sendto('SHUT;'.encode(),(p.ip))
                 break
@@ -189,5 +194,7 @@ class server:
 
 ip = input('Server ip (default localhost): ') or 'localhost'
 port = int(input('Server port (default 50000): ') or 50000)
-server = server(ip,port)
+log = open('server_log.txt', 'w')
+server = server(ip,port,log)
 server.start()
+log.close()
