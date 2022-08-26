@@ -49,6 +49,7 @@ def run_gui(process_queue,type):
             b += 1
     process_queue.put('Gui Started!!!')
     while True:
+        window.update()
         if not process_queue.empty():
             move_type, move = process_queue.get().split(';')
             if move_type == type: #when is this gui's type, the move is from the other player
@@ -58,7 +59,6 @@ def run_gui(process_queue,type):
                 enable()
             else:
                 set_click(type,move)
-        window.update()
 ###############################################################################
 
 if __name__ == '__main__':
