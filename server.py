@@ -18,27 +18,6 @@
 '''
 
 from socket import *
-
-def check_moves(player_moves):
-    win_moves = [
-        [1,2,3], #linha
-        [4,5,6], #linha
-        [7,8,9], #linha
-        [1,4,7], #coluna
-        [2,5,8], #coluna
-        [3,6,9], #coluna
-        [1,5,9], #diag
-        [3,5,7] #diag
-    ]
-
-    for move in win_moves:
-        # testar interseção (set)
-        if (set(move) & set(player_moves)) == set(move):        
-            return True  
-    return False
-
-def switch_turn(turn):
-    return 1 if turn == 0 else 0
   
 class player:
     def __init__(self, name,id, ip):
@@ -49,6 +28,24 @@ class player:
 
     def add_move(self,move):
         self.moves.append(move)
+
+    def check_moves(self):
+        win_moves = [
+            [1,2,3], #linha
+            [4,5,6], #linha
+            [7,8,9], #linha
+            [1,4,7], #coluna
+            [2,5,8], #coluna
+            [3,6,9], #coluna
+            [1,5,9], #diag
+            [3,5,7] #diag
+        ]
+
+        for move in win_moves:
+            # testar interseção (set)
+            if (set(move) & set(self.moves)) == set(move):        
+                return True  
+        return False
 
 class server:
     def __init__(self,ip,port,log,max_players = 2):
@@ -89,6 +86,8 @@ class server:
         print(string)
         log.write(string + '\n')
 
+    def switch_turn(self):
+        self.turn = 1 if self.turn == 0 else 0
 
     def parse(self,message,clientIP):
         message = message.decode().split(';')
@@ -111,11 +110,11 @@ class server:
                 self.moves_count += 1 
 
                 if self.moves_count >= 5:
-                    if check_moves(self.players[self.turn].moves):
+                    if self.players[self.turn].check_moves():
                         winner = self.players[self.turn].name
                         self.update_scoreboard(winner)
                         self.state = 2
-                self.turn = switch_turn(self.turn)
+                self.switch_turn()
                 return move
         except ValueError:
             print('Malformatted message!')
@@ -177,7 +176,7 @@ class server:
                                 
                 except timeout as err:
                     self.printl(f"{self.players[self.turn].name} didn't move in time, switching turn...")
-                    self.turn = switch_turn(self.turn)
+                    self.switch_turn()
 
             elif self.state == 2: #game finished
                 scoreboard_str = self.print_scoreboard()
