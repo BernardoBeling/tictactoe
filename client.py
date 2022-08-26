@@ -69,6 +69,9 @@ if __name__ == '__main__':
                 elif move != '':
                     print(move)
                     client.sendto(f'MOVE;{move};{client_id}'.encode(), (ip,port))
+
+            if status == 'SHOW':
+                print(res[1])
             
         print('Kill process!')
         gui_process.kill()

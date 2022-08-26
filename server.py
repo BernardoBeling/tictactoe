@@ -12,6 +12,7 @@
     TURN;PLAYER_ID;OTHER PLAYER MOVE (server-side)
     MOVE;COORD;PLAYER_ID (client-side)
     RFSH;COORD;PLAYER_ID (server-side)
+    SHOW;SCOREBOARD
     DROP;
     SHUT;
 '''
@@ -38,7 +39,7 @@ def check_moves(player_moves):
 
 def switch_turn(turn):
     return 1 if turn == 0 else 0
-
+  
 class player:
     def __init__(self, name,id, ip):
         self.name = name
@@ -77,7 +78,42 @@ class server:
         self.scoreboard[name] += 1
     
     def print_scoreboard(self):
-        print('Scoreboard:' + str(self.scoreboard).replace("'","").replace("{","").replace("}",""))
+        scoreboard_str = '='*5 + ' Scoreboard ' + '='*5 +'\n'\
+             + str(self.scoreboard).replace("'","").replace("{","").replace("}","") + '\n'\
+                + '='*22
+        print(scoreboard_str)
+        return scoreboard_str
+
+    def parse(self,message,clientIP):
+        message = message.decode().split(';')
+        status = message[0]
+
+        try:
+            if status == 'JOIN' and self.players_count < self.max_players:
+                name = message[1]
+                self.players_count += 1
+                self.players.append(player(name,self.players_count,clientIP)) #create player
+                print(f'{name} joined server!')
+                
+                res = f'ACPT;{name};{self.players_count}'
+
+                return res
+            
+            elif status == 'MOVE':
+                move = message[1]
+                self.players[self.turn].add_move(int(move))
+                self.moves_count += 1 
+
+                if self.moves_count >= 5:
+                    if check_moves(self.players[self.turn].moves):
+                        winner = self.players[self.turn].name
+                        self.update_scoreboard(winner)
+                        self.state = 2
+                self.turn = switch_turn(self.turn)
+                return move
+        except ValueError:
+            print('Malformatted message!')
+            return
     
     def start(self):
         s = socket(AF_INET,SOCK_DGRAM)
@@ -97,19 +133,14 @@ class server:
                     if self.players_count == self.max_players:
                         self.state = 1
                         for i in range(2): #2 first players from queue
-                            type = 'X' if i == 0 else 'O'
-                            s.sendto(f'STRT;{type}'.encode(), self.players[i].ip)
+                            move_type = 'X' if i == 0 else 'O'
+                            s.sendto(f'STRT;{move_type}'.encode(), self.players[i].ip)
                             self.set_scoreboard()
                     else:
                         msg, clientIP = s.recvfrom(1500)
-                        status, name = msg.decode().split(';')
-                        if status == 'JOIN' and self.players_count < self.max_players:
-                            self.players_count += 1
-                            self.players.append(player(name,self.players_count,clientIP)) #create player
-                            print(f'{name} joined server!')
-                            
-                            res = f'ACPT;{name};{self.players_count}'
-                            s.sendto(res.encode(), clientIP)
+                        res = self.parse(msg, clientIP)
+                        s.sendto(res.encode(), clientIP)
+                        
 
                     print(f'Total players: {self.players_count}/{self.max_players}')
 
@@ -118,53 +149,40 @@ class server:
                     s.close()
                     break
 
-            elif self.state == 1:
+            elif self.state == 1: #game started
                 
-                p_ip = self.players[self.turn].ip
-                p_id = self.players[self.turn].id
+                cur_player_ip = self.players[self.turn].ip
+                cur_player_id = self.players[self.turn].id
 
-                idx = 0 if self.turn else 1 #get index of other player 
-                last_move = self.players[idx].moves[-1] if len(self.players[idx].moves) != 0 else ''
-                turn_msg = f'TURN;{p_id};{last_move}'.encode()
-
-                s.settimeout(10) #move time
-
+                s.settimeout(15) #move time
                 try:
                     print(f"{self.players[self.turn].name}'s turn...")
-                    s.sendto(turn_msg,p_ip)
-                    print(f"Sended message: {turn_msg,p_ip}")
+
+                    if self.moves_count == 0:
+                        last_move = ''
+                    
+                    turn_msg = f'TURN;{cur_player_id};{last_move}'.encode()
+                    s.sendto(turn_msg,cur_player_ip)
+                    print(f"Sended message: {turn_msg,cur_player_ip}")
+
                     move_msg, clientIP = s.recvfrom(1500)
-                    print(f'Move recebido no server: {move_msg}')
-                    try:
-                        status, move, move_id = move_msg.decode().split(';')
-                    except ValueError:
-                        print('Malformatted message!')
-
-                    if status == 'MOVE':
-                        self.players[self.turn].add_move(int(move))
-                        self.moves_count += 1 
-
-                        if self.moves_count >= 5:
-                            if check_moves(self.players[self.turn].moves):
-                                winner = self.players[self.turn].name
-                                self.update_scoreboard(winner)
-                                self.state = 2
-                        self.turn = switch_turn(self.turn)
-
+                    print(f'Recebido no server: {move_msg}')
+                    
+                    last_move = self.parse(move_msg,clientIP)
+                                
                 except timeout as err:
                     print(f"{self.players[self.turn].name} didn't move in time, switching turn...")
                     self.turn = switch_turn(self.turn)
 
-            elif self.state == 2:
+            elif self.state == 2: #game finished
                 self.print_scoreboard()
                 self.clear_moves()
-
                 for p in self.players:
+                    show_msg = f'SHOW;{self.print_scoreboard()}'.encode()
+                    s.sendto(show_msg,p.ip)
                     s.sendto('SHUT;'.encode(),(p.ip))
                 break
-  
         return
-
 
     def __del__(self):
         print('Server closed!')
@@ -172,4 +190,4 @@ class server:
 ip = input('Server ip (default localhost): ') or 'localhost'
 port = int(input('Server port (default 50000): ') or 50000)
 server = server(ip,port)
-server.start() #multiprocess?
+server.start()
